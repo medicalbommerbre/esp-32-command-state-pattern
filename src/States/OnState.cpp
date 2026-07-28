@@ -21,12 +21,10 @@ void OnState::bright(LightController& controller) const {
     }
     else if(topState == &controller.normalLightState){
         controller.oneUpCommand.execute();
-        //controller.setState(&controller.brightLightState);
     }
     else if(topState == &controller.dimLightState){
         controller.oneUpCommand.execute();
         controller.oneUpCommand.execute();
-        //controller.setState(&controller.brightLightState);
     }
 }
 void OnState::normal(LightController& controller) const {
@@ -39,11 +37,10 @@ void OnState::normal(LightController& controller) const {
     }
     else if(topState == &controller.brightLightState){
         controller.oneDownCommand.execute();
-        //controller.setState(&controller.normalLightState);
+
     }
     else if(topState == &controller.dimLightState){
         controller.oneDownCommand.execute();
-        //controller.setState(&controller.normalLightState);
     }
 
 }
@@ -56,12 +53,10 @@ void OnState::dim(LightController& controller) const {
     }
     else if(topState == &controller.normalLightState){
         controller.oneDownCommand.execute();
-        //controller.setState(&controller.dimLightState);
     }
     else if(topState == &controller.brightLightState){
         controller.oneDownCommand.execute();
         controller.oneDownCommand.execute();
-        //controller.setState(&controller.dimLightState);
     }
     
 }

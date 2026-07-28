@@ -8,7 +8,6 @@ void OffState::off(LightController& controller) const {
 }
 void OffState::on(LightController& controller) const {
     controller.onCommand.execute();
-    //controller.setState(&controller.onState);
 }
 void OffState::bright(LightController& controller) const {
 

@@ -13,14 +13,13 @@ void DimLightState::on(LightController& controller) const {
 void DimLightState::bright(LightController& controller) const {
     controller.oneUpCommand.execute();
 
-    //controller.setState(&controller.brightLightState);
 }
 
 void DimLightState::normal(LightController& controller) const {
     controller.oneUpCommand.execute();
     delay(200);
     controller.oneUpCommand.execute();
-    //controller.setState(&controller.normalLightState);
+
 }
 
 void DimLightState::dim(LightController& controller) const {

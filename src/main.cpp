@@ -10,12 +10,12 @@
 constexpr int SERVO_1_PIN = 16;
 constexpr int SERVO_2_PIN = 17;
 
-constexpr int DIM_BUTTON_PIN = 26;
+constexpr int DIM_BUTTON_PIN = 27;
 constexpr int NORMAL_BUTTON_PIN = 25;
-constexpr int BRIGHT_BUTTON_PIN = 27;
+constexpr int BRIGHT_BUTTON_PIN = 33;
 
 constexpr int MOTION_SENSOR_PIN = 32;
-constexpr int TOUCH_PIN = 33;
+constexpr int TOUCH_PIN = 26;
 
 bool sensorDisabled = false;
 unsigned long lastMotionCommandTime = 0;
@@ -55,21 +55,19 @@ void handleInputs(
 )
 {
   
-  if (touchPressed)
+  if (touchPressed || motionDetected)
   {
-    Serial.println("Touch button pressed");
-
     String currentState = light.getState()->toString();
-
     if (currentState == light.offState.toString())
     {
       light.on();
+      light.setState(light.lastState());
     }
     else
     {
       light.off();
+      light.setState(&light.offState);
     }
-
     return;
   }
 
@@ -125,18 +123,6 @@ void handleDim()
   server.send(200, "text/plain", "OK");
 }
 
-void handleStateUp()
-{
-  String currentState = light.getState()->toString();
-
-}
-
-void handleStateDown()
-{
-  String currentState = light.getState()->toString();
-
-}
-
 void handleGetState()
 {
   server.send(
@@ -151,20 +137,19 @@ void handlePostValue() {
     server.send(400, "text/plain", "Missing value");
     return;
   }
-
   latestBrightness = server.arg("value").toInt();
 
   int brightnessChange = latestBrightness - lastLDRRead;
   String state = light.getState()->toString();
 
-  Serial.print("Previous: ");
-  Serial.print(lastLDRRead);
-  Serial.print(" | Current: ");
-  Serial.print(latestBrightness);
-  Serial.print(" | Change: ");
-  Serial.print(brightnessChange);
-  Serial.print(" | State: ");
-  Serial.println(light.getState()->toString());
+  // Serial.print("Previous: ");
+  // Serial.print(lastLDRRead);
+  // Serial.print(" | Current: ");
+  // Serial.print(latestBrightness);
+  // Serial.print(" | Change: ");
+  // Serial.print(brightnessChange);
+  // Serial.print(" | State: ");
+  // Serial.println(light.getState()->toString());
 
   if (brightnessChange >= 200) {
     // Room became brighter
@@ -184,7 +169,6 @@ void handlePostValue() {
       light.setState(&light.dimLightState);
     }
   }
-
   lastLDRRead = latestBrightness;
 
   server.send(200, "text/plain", "OK");
@@ -198,7 +182,6 @@ void handleNotFound() {
   server.send(404, "text/plain", "Not found");
 }
 
-
 /**
  * Registers all HTTP endpoints.
  */
@@ -210,21 +193,16 @@ void configureWebServer()
   server.on("/normal", HTTP_GET, handleNormal);
   server.on("/dim", HTTP_GET, handleDim);
   server.on("/state", HTTP_GET, handleGetState);
-  
   server.on("/value", HTTP_POST, handlePostValue);
   server.on("/value", HTTP_GET, handleGetValue);
+
   server.onNotFound(handleNotFound);
-
-
   server.begin();
-
 }
 
 void configurePins()
 {
   pinMode(MOTION_SENSOR_PIN, INPUT);
-
-  // This assumes an external digital touch sensor.
   pinMode(TOUCH_PIN, INPUT_PULLDOWN);
 
   pinMode(DIM_BUTTON_PIN, INPUT_PULLUP);
@@ -277,7 +255,6 @@ void loop()
 {
   server.handleClient();
 
-  // Inputs are active LOW because the buttons use INPUT_PULLUP.
   bool touchActive = digitalRead(TOUCH_PIN) == HIGH;
   bool dimButtonActive = digitalRead(DIM_BUTTON_PIN) == LOW;
   bool normalButtonActive = digitalRead(NORMAL_BUTTON_PIN) == LOW;

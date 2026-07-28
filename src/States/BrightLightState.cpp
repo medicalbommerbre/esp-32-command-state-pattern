@@ -15,14 +15,11 @@ void BrightLightState::bright(LightController& controller) const {
 void BrightLightState::normal(LightController& controller) const {
     controller.oneDownCommand.execute();
 
-    //controller.setState(&controller.normalLightState);
-
 }
 void BrightLightState::dim(LightController& controller) const {
     controller.oneDownCommand.execute();
     delay(200);
     controller.oneDownCommand.execute();
-    //controller.setState(&controller.dimLightState);
 }
 String BrightLightState::toString() const{
     return "BrightLightState";

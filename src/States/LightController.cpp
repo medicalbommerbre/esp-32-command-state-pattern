@@ -27,8 +27,6 @@ public:
     OneDownCommand oneDownCommand;
     OneUpCommand oneUpCommand;
 
-
-
     LightController(Servo& s1, Servo& s2)
         : lightState(&dimLightState),
           offCommand(s1),
@@ -57,6 +55,10 @@ public:
 
     LightState* getState() {
         return lightState;
+    }
+    LightState* lastState(){
+        LightState* temp = states.top();
+        return temp;
     }
 
     void off()    { lightState->off(*this); }
