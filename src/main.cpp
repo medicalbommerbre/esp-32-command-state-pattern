@@ -26,6 +26,9 @@ bool previousDimButtonState = false;
 bool previousNormalButtonState = false;
 bool previousBrightButtonState = false;
 
+//This bool determines what way the buttons needs to be pressed based on a sudden change in brightness without any commands being executed recently
+bool backwardMode = false;
+
 int latestBrightness = 0;
 int lastLDRRead = 0;
 
@@ -54,41 +57,42 @@ void handleInputs(
   bool motionDetected
 )
 {
-  
+
   if (touchPressed || motionDetected)
   {
     String currentState = light.getState()->toString();
+
     if (currentState == light.offState.toString())
     {
       light.on();
-      light.setState(light.lastState());
+      lastMotionCommandTime = millis();
     }
     else
     {
       light.off();
-      light.setState(&light.offState);
+      lastMotionCommandTime = millis();
     }
     return;
   }
-
   if (normalPressed)
   {
     light.normal();
+    lastMotionCommandTime = millis();
     return;
   }
-
   if (brightPressed)
   {
     light.bright();
+    lastMotionCommandTime = millis();
     return;
   }
-
   if (dimPressed)
   {
     light.dim();
+    lastMotionCommandTime = millis();
     return;
   }
-}
+  }
 
 /**
  * Web server route handlers.
@@ -134,44 +138,65 @@ void handleGetState()
 
 void handlePostValue() {
   if (!server.hasArg("value")) {
-    server.send(400, "text/plain", "Missing value");
-    return;
+      server.send(400, "text/plain", "Missing value");
+      return;
   }
+
   latestBrightness = server.arg("value").toInt();
 
   int brightnessChange = latestBrightness - lastLDRRead;
-  String state = light.getState()->toString();
+  LightState* currentState = light.getState();
 
-  // Serial.print("Previous: ");
-  // Serial.print(lastLDRRead);
-  // Serial.print(" | Current: ");
-  // Serial.print(latestBrightness);
-  // Serial.print(" | Change: ");
-  // Serial.print(brightnessChange);
-  // Serial.print(" | State: ");
-  // Serial.println(light.getState()->toString());
+  bool commandWasOverOneSecondAgo =
+      millis() - lastMotionCommandTime >= 1000UL;
 
-  if (brightnessChange >= 200) {
-    // Room became brighter
-    if (state == light.dimLightState.toString()) {
-      light.setState(&light.normalLightState);
-    }
-    else if (state == light.normalLightState.toString()) {
-      light.setState(&light.brightLightState);
-    }
+  if (brightnessChange >= 450 &&
+      currentState == &light.offState) {
+
+      // Light went ON
+      if (!light.getLastState().empty()) {
+          LightState* tempState = light.getLastState().top();
+          light.setState(tempState);
+      }
+
+      if (commandWasOverOneSecondAgo) {
+          light.setBackwards(true);
+      }else{
+        light.setBackwards(false);
+      }
+
+  } else if (brightnessChange <= -450 &&
+              currentState != &light.offState) {
+
+      // Light went OFF
+        if (commandWasOverOneSecondAgo) {
+          light.setBackwards(true);
+        }else{
+          light.setBackwards(false);
+        }
+
+
+      light.setState(&light.offState);
+
+  } else if (brightnessChange >= 200) {
+      // Room became brighter
+      if (currentState == &light.dimLightState) {
+          light.setState(&light.normalLightState);
+      } else if (currentState == &light.normalLightState) {
+          light.setState(&light.brightLightState);
+      }
+
+  } else if (brightnessChange <= -200) {
+      // Room became darker
+      if (currentState == &light.brightLightState) {
+          light.setState(&light.normalLightState);
+      } else if (currentState == &light.normalLightState) {
+          light.setState(&light.dimLightState);
+      }
   }
-  else if (brightnessChange <= -200) {
-    // Room became darker
-    if (state == light.brightLightState.toString()) {
-      light.setState(&light.normalLightState);
-    }
-    else if (state == light.normalLightState.toString()) {
-      light.setState(&light.dimLightState);
-    }
-  }
-  lastLDRRead = latestBrightness;
 
-  server.send(200, "text/plain", "OK");
+    lastLDRRead = latestBrightness;
+    server.send(200, "text/plain", "OK");
 }
 
 void handleGetValue() {
@@ -288,7 +313,7 @@ void loop()
     normalPressed,
     brightPressed,
     motionDetected
-  );
+    );
 
   previousTouchState = touchActive;
   previousDimButtonState = dimButtonActive;

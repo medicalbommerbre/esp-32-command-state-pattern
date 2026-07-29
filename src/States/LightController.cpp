@@ -12,6 +12,11 @@
 #include "Commands/OneDownCommand.h"
 #include "Commands/OneUpCommand.h"
 
+#include "Commands/OneDownCommandBackward.h"
+#include "Commands/OneUpCommandBackward.h"
+#include "Commands/OffCommandBackward.h"
+#include "Commands/OnCommandBackward.h"
+
 class LightController {
 public:
     std::stack<LightState*> states;
@@ -27,12 +32,22 @@ public:
     OneDownCommand oneDownCommand;
     OneUpCommand oneUpCommand;
 
+    OffCommandBackward offCommandBackward;
+    OnCommandBackward onCommandBackward;
+    OneDownCommandBackward oneDownCommandBackward;
+    OneUpCommandBackward oneUpCommandBackward;
+
+    bool backwards = false;
     LightController(Servo& s1, Servo& s2)
         : lightState(&dimLightState),
           offCommand(s1),
           onCommand(s2),
           oneDownCommand(s2, s1),
-          oneUpCommand(s2, s1)  
+          oneUpCommand(s2, s1),
+          offCommandBackward(s2),
+          onCommandBackward(s1),
+          oneDownCommandBackward(s1, s2),
+          oneUpCommandBackward(s1,s2)
     {
         states.push(&dimLightState);
     }
@@ -59,6 +74,10 @@ public:
     LightState* lastState(){
         LightState* temp = states.top();
         return temp;
+    }
+
+    void setBackwards(bool i){
+        backwards = i;
     }
 
     void off()    { lightState->off(*this); }

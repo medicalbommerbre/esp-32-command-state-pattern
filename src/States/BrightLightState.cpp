@@ -4,7 +4,7 @@
 
 void BrightLightState::off(LightController& controller) const {
     controller.offCommand.execute();
-    //controller.setState(&controller.offState);
+
 }
 void BrightLightState::on(LightController& controller) const {
 
