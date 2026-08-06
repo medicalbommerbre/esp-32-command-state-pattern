@@ -17,6 +17,11 @@
 #include "Commands/OffCommandBackward.h"
 #include "Commands/OnCommandBackward.h"
 
+#include "Commands/NinetyDegreePressServo1.h"
+#include "Commands/ThirtyDegreePressServo1.h"
+#include "Commands/NinetyDegreePressServo2.h"
+#include "Commands/ThirtyDegreePressServo2.h"
+
 class LightController {
 public:
     std::stack<LightState*> states;
@@ -37,6 +42,11 @@ public:
     OneDownCommandBackward oneDownCommandBackward;
     OneUpCommandBackward oneUpCommandBackward;
 
+    NinetyDegreePressServo1 ninetyDegreePressServo1;
+    ThirtyDegreePressServo1 thirtyDegreePressServo1;
+    NinetyDegreePressServo2 ninetyDegreePressServo2;
+    ThirtyDegreePressServo2 thirtyDegreePressServo2;
+
     bool backwards = false;
     LightController(Servo& s1, Servo& s2)
         : lightState(&dimLightState),
@@ -47,7 +57,12 @@ public:
           offCommandBackward(s2),
           onCommandBackward(s1),
           oneDownCommandBackward(s1, s2),
-          oneUpCommandBackward(s1,s2)
+          oneUpCommandBackward(s1,s2),
+
+          ninetyDegreePressServo1(s1),
+          ninetyDegreePressServo2(s2),
+          thirtyDegreePressServo1(s1),
+          thirtyDegreePressServo2(s2)
     {
         states.push(&dimLightState);
     }
@@ -79,6 +94,65 @@ public:
     void setBackwards(bool i){
         backwards = i;
     }
+
+    void readLDR() {
+
+        latestBrightness = analogRead(LDR_PIN);
+
+        int brightnessChange = latestBrightness - lastLDRRead;
+        LightState* currentState = light.getState();
+        Serial.println(latestBrightness);
+        bool commandWasOverOneSecondAgo =
+            millis() - lastMotionCommandTime >= 1000UL;
+
+        if (brightnessChange >= 200 &&
+            currentState != &light.onState) {
+
+            // Light went ON
+            if (!light.getLastState().empty()) {
+                LightState* tempState = light.getLastState().top();
+                light.setState(tempState);
+            }
+
+            if (commandWasOverOneSecondAgo) {
+                light.setBackwards(true);
+            }else{
+                light.setBackwards(false);
+            }
+
+        } else if (brightnessChange <= -100 &&
+                    currentState != &light.offState) {
+        
+            // Light went OFF
+                if (commandWasOverOneSecondAgo) {
+                light.setBackwards(true);
+                }else{
+                light.setBackwards(false);
+                }
+
+
+            light.setState(&light.offState);
+
+        } else if (brightnessChange >= 100) {
+            // Room became brighter
+            if (currentState == &light.dimLightState) {
+                light.setState(&light.normalLightState);
+            } else if (currentState == &light.normalLightState) {
+                light.setState(&light.brightLightState);
+            }
+
+        } else if (brightnessChange <= -100) {
+            // Room became darker
+            if (currentState == &light.brightLightState) {
+                light.setState(&light.normalLightState);
+            } else if (currentState == &light.normalLightState) {
+                light.setState(&light.dimLightState);
+            }
+        }
+
+    lastLDRRead = latestBrightness;
+
+}
 
     void off()    { lightState->off(*this); }
     void on()     { lightState->on(*this); }

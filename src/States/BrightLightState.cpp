@@ -16,10 +16,17 @@ void BrightLightState::normal(LightController& controller) const {
     controller.oneDownCommand.execute();
 
 }
-void BrightLightState::dim(LightController& controller) const {
-    controller.oneDownCommand.execute();
-    delay(200);
-    controller.oneDownCommand.execute();
+void BrightLightState::dim(LightController& c) const {
+    c.ninetyDegreePressServo2.execute();
+    c.thirtyDegreePressServo1.execute();
+    c.readLDR();
+    
+
+
+
+
+
+   
 }
 String BrightLightState::toString() const{
     return "BrightLightState";

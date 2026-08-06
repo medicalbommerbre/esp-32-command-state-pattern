@@ -3,7 +3,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <WiFiManager.h>
-
+#include <ArduinoOTA.h>
 #include "States/LightController.cpp"
 
 
@@ -15,17 +15,22 @@ constexpr int NORMAL_BUTTON_PIN = 25;
 constexpr int BRIGHT_BUTTON_PIN = 33;
 
 constexpr int MOTION_SENSOR_PIN = 32;
+constexpr int LDR_PIN = 34;
 constexpr int TOUCH_PIN = 26;
 
 bool sensorDisabled = false;
 unsigned long lastMotionCommandTime = 0;
+unsigned long lastMotionDetected = 0;
+unsigned long lastLDRReadTime = 0;
+constexpr unsigned long LDR_INTERVAL_MS = 250;
+constexpr int LDR_CHANGE_THRESHOLD = 250;
 constexpr unsigned long MOTION_COOLDOWN_MS = 10000;
 
 bool previousTouchState = false;
 bool previousDimButtonState = false;
 bool previousNormalButtonState = false;
 bool previousBrightButtonState = false;
-
+bool previousMotionState = false;
 //This bool determines what way the buttons needs to be pressed based on a sudden change in brightness without any commands being executed recently
 bool backwardMode = false;
 
@@ -58,7 +63,7 @@ void handleInputs(
 )
 {
 
-  if (touchPressed || motionDetected)
+  if (touchPressed)
   {
     String currentState = light.getState()->toString();
 
@@ -92,6 +97,23 @@ void handleInputs(
     lastMotionCommandTime = millis();
     return;
   }
+  if(motionDetected){
+    String currentState = light.getState()->toString();
+    if(millis()-lastMotionDetected >=30000){// if last motion was more then 30 seconds ago the sensor will work, otherwise it will be locked(otherwise it will start spamming the servos. if needed change to 10 seconds(10000)
+      if (currentState == light.offState.toString())
+      {
+        light.on();
+        lastMotionCommandTime = millis();
+      }
+      else
+      {
+        light.off();
+        lastMotionCommandTime = millis();
+      }
+    lastMotionDetected = millis();
+    }
+    return;
+  }
   }
 
 /**
@@ -107,6 +129,14 @@ void handleOff()
 {
   light.off();
   server.send(200, "text/plain", "OK");
+}
+void handleLDR(){
+  latestBrightness = analogRead(LDR_PIN);
+  server.send(
+    200,
+    "text/plain",
+    "OK: " + String(latestBrightness)
+  );
 }
 
 void handleBright()
@@ -136,22 +166,18 @@ void handleGetState()
   );
 }
 
-void handlePostValue() {
-  if (!server.hasArg("value")) {
-      server.send(400, "text/plain", "Missing value");
-      return;
-  }
+void readLDR() {
 
-  latestBrightness = server.arg("value").toInt();
+  latestBrightness = analogRead(LDR_PIN);
 
   int brightnessChange = latestBrightness - lastLDRRead;
   LightState* currentState = light.getState();
-
+  Serial.println(latestBrightness);
   bool commandWasOverOneSecondAgo =
       millis() - lastMotionCommandTime >= 1000UL;
 
-  if (brightnessChange >= 450 &&
-      currentState == &light.offState) {
+  if (brightnessChange >= 200 &&
+      currentState != &light.onState) {
 
       // Light went ON
       if (!light.getLastState().empty()) {
@@ -165,7 +191,7 @@ void handlePostValue() {
         light.setBackwards(false);
       }
 
-  } else if (brightnessChange <= -450 &&
+  } else if (brightnessChange <= -100 &&
               currentState != &light.offState) {
 
       // Light went OFF
@@ -178,7 +204,7 @@ void handlePostValue() {
 
       light.setState(&light.offState);
 
-  } else if (brightnessChange >= 200) {
+  } else if (brightnessChange >= 100) {
       // Room became brighter
       if (currentState == &light.dimLightState) {
           light.setState(&light.normalLightState);
@@ -186,7 +212,7 @@ void handlePostValue() {
           light.setState(&light.brightLightState);
       }
 
-  } else if (brightnessChange <= -200) {
+  } else if (brightnessChange <= -100) {
       // Room became darker
       if (currentState == &light.brightLightState) {
           light.setState(&light.normalLightState);
@@ -196,20 +222,12 @@ void handlePostValue() {
   }
 
     lastLDRRead = latestBrightness;
-    server.send(200, "text/plain", "OK");
-}
 
-void handleGetValue() {
-  server.send(200, "text/plain", String(latestBrightness));
 }
-
 void handleNotFound() {
   server.send(404, "text/plain", "Not found");
 }
 
-/**
- * Registers all HTTP endpoints.
- */
 void configureWebServer()
 {
   server.on("/on", HTTP_GET, handleOn);
@@ -218,8 +236,7 @@ void configureWebServer()
   server.on("/normal", HTTP_GET, handleNormal);
   server.on("/dim", HTTP_GET, handleDim);
   server.on("/state", HTTP_GET, handleGetState);
-  server.on("/value", HTTP_POST, handlePostValue);
-  server.on("/value", HTTP_GET, handleGetValue);
+  server.on("/LDR", HTTP_GET, handleLDR);
 
   server.onNotFound(handleNotFound);
   server.begin();
@@ -229,7 +246,6 @@ void configurePins()
 {
   pinMode(MOTION_SENSOR_PIN, INPUT);
   pinMode(TOUCH_PIN, INPUT_PULLDOWN);
-
   pinMode(DIM_BUTTON_PIN, INPUT_PULLUP);
   pinMode(NORMAL_BUTTON_PIN, INPUT_PULLUP);
   pinMode(BRIGHT_BUTTON_PIN, INPUT_PULLUP);
@@ -261,6 +277,26 @@ void connectToWiFi()
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 }
+void configureOTA(){  
+  ArduinoOTA
+    .onStart([]() {
+      Serial.println("OTA Start");
+    })
+    .onEnd([]() {
+      Serial.println("\nOTA End");
+    })
+    .onProgress([](unsigned int progress, unsigned int total) {
+      Serial.printf("Progress: %u%%\r", (progress * 100) / total);
+    })
+    .onError([](ota_error_t error) {
+      Serial.printf("Error[%u]\n", error);
+    });
+
+  ArduinoOTA.begin();
+  ArduinoOTA.setHostname("ESP32-LIGHTS");
+  Serial.println("Ready for OTA");
+
+}
 
 void setup()
 {
@@ -274,18 +310,28 @@ void setup()
   configurePins();
   connectToWiFi();
   configureWebServer();
+  configureOTA();
 }
-
 void loop()
 {
+  ArduinoOTA.handle();
   server.handleClient();
-
+  if (millis() - lastLDRReadTime >= LDR_INTERVAL_MS)
+  {
+    lastLDRReadTime = millis();
+    readLDR();
+  }
   bool touchActive = digitalRead(TOUCH_PIN) == HIGH;
   bool dimButtonActive = digitalRead(DIM_BUTTON_PIN) == LOW;
   bool normalButtonActive = digitalRead(NORMAL_BUTTON_PIN) == LOW;
   bool brightButtonActive = digitalRead(BRIGHT_BUTTON_PIN) == LOW;
 
-  bool motionDetected = digitalRead(MOTION_SENSOR_PIN) == HIGH;
+  bool motionActive = digitalRead(MOTION_SENSOR_PIN) == HIGH;
+
+  bool motionDetected = wasJustPressed(
+    motionActive,
+    previousMotionState
+  );
 
   bool touchPressed = wasJustPressed(
     touchActive,
@@ -319,6 +365,6 @@ void loop()
   previousDimButtonState = dimButtonActive;
   previousNormalButtonState = normalButtonActive;
   previousBrightButtonState = brightButtonActive;
-
+  previousMotionState = motionActive;
   delay(10);
 }
